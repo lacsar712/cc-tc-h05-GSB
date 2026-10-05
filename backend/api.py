@@ -151,5 +151,9 @@ def create_log():
         db.commit()
         db.refresh(row)
         return jsonify(row_dict(row)), 201
+    except Exception:
+        # 写入中断：回滚整笔，桩号/毫米的对调碎片一律不留库。
+        db.rollback()
+        raise
     finally:
         db.close()
