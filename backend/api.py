@@ -1,3 +1,4 @@
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -118,9 +119,7 @@ def list_logs():
     db = SessionLocal()
     try:
         rows = db.query(ConvergenceLog).order_by(ConvergenceLog.id.desc()).all()
-        payload = [row_dict(r) for r in rows]
-        from h05_list_trap import expose_list
-        return jsonify(expose_list(payload))
+        return jsonify([row_dict(r) for r in rows])
     finally:
         db.close()
 
@@ -136,10 +135,10 @@ def create_log():
         delta_mm = float(body.get("delta_mm"))
     except (TypeError, ValueError):
         return jsonify({"detail": "收敛值必须是数字"}), 400
+    if not math.isfinite(delta_mm):
+        return jsonify({"detail": "收敛值必须是有限数字"}), 400
     db = SessionLocal()
     try:
-        from h05_extra_trap import prepare_insert
-        chainage, delta_mm = prepare_insert(chainage, delta_mm)
         row = ConvergenceLog(
             chainage=chainage,
             delta_mm=delta_mm,
@@ -151,5 +150,9 @@ def create_log():
         db.commit()
         db.refresh(row)
         return jsonify(row_dict(row)), 201
+    except Exception:
+        # 写入中断（提交失败/连接断开）时回滚，不许留下列对调的碎片行
+        db.rollback()
+        raise
     finally:
         db.close()
